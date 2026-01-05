@@ -86,7 +86,7 @@
                     </div>
                 </div>
 
-                <!-- Info Grid (4 Kotak) -->
+                <!-- Info Grid -->
                 <div class="grid grid-cols-2 gap-3">
                     <!-- Suhu -->
                     <div class="glass rounded-xl p-4 relative overflow-hidden">
@@ -96,6 +96,16 @@
                             <span class="text-xs text-gray-500 mb-1">°C</span>
                         </div>
                         <div class="w-full bg-gray-800 h-1 mt-2 rounded-full"><div id="bar-temp" class="h-full bg-orange-500 w-0 transition-all"></div></div>
+                    </div>
+
+                    <!-- Daya Motor (BARU) -->
+                    <div class="glass rounded-xl p-4 relative overflow-hidden">
+                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Daya Motor</p>
+                        <div class="flex items-end gap-1 mt-1">
+                            <h2 id="val-power" class="text-2xl font-bold text-white">0</h2>
+                            <span class="text-xs text-gray-500 mb-1">mW</span>
+                        </div>
+                        <div class="w-full bg-gray-800 h-1 mt-2 rounded-full"><div id="bar-power" class="h-full bg-yellow-400 w-0 transition-all"></div></div>
                     </div>
                     
                     <!-- Viskositas -->
@@ -112,11 +122,15 @@
                         <p class="text-[10px] text-gray-500 mt-1">Indikator Kristal</p>
                     </div>
 
-                    <!-- Durasi -->
-                    <div class="glass rounded-xl p-4">
-                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Durasi Masak</p>
-                        <h2 id="val-duration" class="text-lg font-bold text-emerald-300 mt-1 font-mono">00:00:00</h2>
-                        <p class="text-[10px] text-gray-500 mt-1">Waktu Berjalan</p>
+                    <!-- Durasi (Full Width pada grid ganjil) -->
+                    <div class="glass rounded-xl p-4 col-span-2">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Durasi Masak</p>
+                                <h2 id="val-duration" class="text-2xl font-bold text-emerald-300 mt-1 font-mono">00:00:00</h2>
+                            </div>
+                            <i class="fa-solid fa-stopwatch text-3xl text-emerald-500/20"></i>
+                        </div>
                     </div>
                 </div>
 
@@ -351,13 +365,17 @@
             const power = data.power || 0;
             const motorState = data.motor || "OFF";
 
-            // 1. Update Teks
+            // 1. Update Teks Suhu
             document.getElementById('val-temp').innerText = temp.toFixed(1);
-            
-            // 2. Update Bar Suhu & Cek Peringatan
             const tempPct = Math.min((temp / appSettings.maxTemp) * 100, 100);
             const barTemp = document.getElementById('bar-temp');
             barTemp.style.width = `${tempPct}%`;
+
+            // 2. Update Teks & Bar Daya (BARU)
+            document.getElementById('val-power').innerText = power.toFixed(0);
+            const powerPct = Math.min((power / appSettings.maxPower) * 100, 100);
+            const barPower = document.getElementById('bar-power');
+            barPower.style.width = `${powerPct}%`;
             
             // LOGIKA PERINGATAN (ALERT)
             const banner = document.getElementById('notif-banner');
@@ -365,10 +383,13 @@
             const bText = document.getElementById('notif-text');
             const bIcon = document.getElementById('notif-icon');
 
+            // Reset Colors
+            barTemp.className = "h-full bg-orange-500 transition-all";
+            barPower.className = "h-full bg-yellow-400 transition-all";
+
             // Prioritas 1: Suhu Tinggi
             if (temp >= appSettings.maxTemp) {
                 barTemp.className = "h-full bg-red-600 transition-all animate-pulse";
-                
                 banner.classList.remove('hidden', 'bg-emerald-900/50', 'border-emerald-500');
                 banner.classList.add('bg-red-900/80', 'border-red-500', 'animate-pulse');
                 
@@ -380,8 +401,7 @@
             
             // Prioritas 2: Daya Tinggi
             } else if (power >= appSettings.maxPower) {
-                barTemp.className = "h-full bg-orange-500 transition-all"; 
-                
+                barPower.className = "h-full bg-red-600 transition-all animate-pulse";
                 banner.classList.remove('hidden', 'bg-emerald-900/50', 'border-emerald-500');
                 banner.classList.add('bg-red-900/80', 'border-red-500', 'animate-pulse');
                 
@@ -393,8 +413,6 @@
 
             // Prioritas 3: Normal
             } else if (motorState === "ON") {
-                barTemp.className = "h-full bg-orange-500 transition-all";
-                
                 banner.classList.remove('hidden', 'bg-red-900/80', 'border-red-500', 'animate-pulse');
                 banner.classList.add('glass', 'border-emerald-500'); // Greenish look
                 
@@ -405,7 +423,6 @@
                 bText.className = "text-xs text-emerald-200/70";
             } else {
                 // Standby (Hide banner)
-                barTemp.className = "h-full bg-orange-500 transition-all";
                 banner.classList.add('hidden');
             }
 
@@ -469,6 +486,7 @@
             if(motorState === "ON") {
                 if(!cookTimer) startCookTimer();
                 motorWasRunning = true;
+                // Note: 'rpm' di sessionData digunakan untuk menyimpan nilai POWER agar seragam
                 sessionData.push({ time: new Date().toLocaleTimeString(), temp: temp, rpm: power });
             } else {
                 if(cookTimer) stopCookTimer();
@@ -483,6 +501,7 @@
                         date: new Date().toLocaleString(),
                         duration: document.getElementById('val-duration').innerText,
                         maxTemp: Math.max(...sessionData.map(d => d.temp)).toFixed(1),
+                        maxPower: Math.max(...sessionData.map(d => d.rpm)).toFixed(0), // HITUNG MAX DAYA
                         data: [...sessionData]
                     };
                     
@@ -658,14 +677,15 @@
                 card.className = "glass rounded-xl p-4 flex justify-between items-center group hover:bg-white/5 transition";
                 card.onclick = () => renderHistoryChart(item); 
                 card.innerHTML = `
-                    <div class="cursor-pointer">
-                        <p class="text-[10px] text-gray-500 font-mono">${item.date}</p>
-                        <div class="flex gap-3 mt-1">
-                            <div><span class="text-xs text-gray-400">Temp Max</span><p class="font-bold text-orange-400">${item.maxTemp}°C</p></div>
-                            <div><span class="text-xs text-gray-400">Durasi</span><p class="font-bold text-emerald-400">${item.duration}</p></div>
+                    <div class="cursor-pointer w-full">
+                        <p class="text-[10px] text-gray-500 font-mono mb-2">${item.date}</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div><span class="text-xs text-gray-400 block">Temp Max</span><p class="font-bold text-orange-400">${item.maxTemp}°C</p></div>
+                            <div><span class="text-xs text-gray-400 block">Daya Max</span><p class="font-bold text-yellow-400">${item.maxPower || 0} mW</p></div>
+                            <div><span class="text-xs text-gray-400 block">Durasi</span><p class="font-bold text-emerald-400">${item.duration}</p></div>
                         </div>
                     </div>
-                    <button onclick="event.stopPropagation(); deleteHistory(${item.id})" class="text-red-500/50 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition">
+                    <button onclick="event.stopPropagation(); deleteHistory(${item.id})" class="text-red-500/50 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition ml-2">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 `;
@@ -721,6 +741,12 @@
                 document.getElementById('val-visc').className = "text-lg font-bold text-blue-300 mt-1";
                 document.getElementById('val-sat').innerText = "Belum";
                 document.getElementById('val-sat').className = "text-lg font-bold text-purple-300 mt-1";
+                
+                // Reset warna bar
+                document.getElementById('bar-temp').className = "h-full bg-orange-500 transition-all";
+                document.getElementById('bar-power').className = "h-full bg-yellow-400 transition-all";
+                document.getElementById('notif-banner').classList.add('hidden');
+
                 addLog('status', "Sistem Di-Reset Manual");
             }
         };
