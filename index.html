@@ -362,8 +362,12 @@
         // --- DASHBOARD UPDATER ---
         function updateDashboard(data) {
             const temp = data.temp || 0;
-            const power = data.power || 0;
+            const rawPower = data.power || 0;
             const motorState = data.motor || "OFF";
+
+            // LOGIKA TAMPILAN: Jika motor OFF, paksa tampilan daya jadi 0 agar rapi
+            // (Mengabaikan arus standby/noise sensor)
+            const displayPower = (motorState === "ON") ? rawPower : 0;
 
             // 1. Update Teks Suhu
             document.getElementById('val-temp').innerText = temp.toFixed(1);
@@ -371,9 +375,9 @@
             const barTemp = document.getElementById('bar-temp');
             barTemp.style.width = `${tempPct}%`;
 
-            // 2. Update Teks & Bar Daya (BARU)
-            document.getElementById('val-power').innerText = power.toFixed(0);
-            const powerPct = Math.min((power / appSettings.maxPower) * 100, 100);
+            // 2. Update Teks & Bar Daya (Gunakan displayPower)
+            document.getElementById('val-power').innerText = displayPower.toFixed(0);
+            const powerPct = Math.min((displayPower / appSettings.maxPower) * 100, 100);
             const barPower = document.getElementById('bar-power');
             barPower.style.width = `${powerPct}%`;
             
@@ -400,7 +404,7 @@
                 bText.className = "text-xs text-red-200";
             
             // Prioritas 2: Daya Tinggi
-            } else if (power >= appSettings.maxPower) {
+            } else if (displayPower >= appSettings.maxPower) {
                 barPower.className = "h-full bg-red-600 transition-all animate-pulse";
                 banner.classList.remove('hidden', 'bg-emerald-900/50', 'border-emerald-500');
                 banner.classList.add('bg-red-900/80', 'border-red-500', 'animate-pulse');
@@ -408,7 +412,7 @@
                 bIcon.className = "fa-solid fa-bolt text-red-400";
                 bTitle.innerText = "PERINGATAN DAYA TINGGI!";
                 bTitle.className = "text-sm font-bold text-red-200";
-                bText.innerText = `Daya (${power} mW) melebihi batas ${appSettings.maxPower} mW`;
+                bText.innerText = `Daya (${displayPower} mW) melebihi batas ${appSettings.maxPower} mW`;
                 bText.className = "text-xs text-red-200";
 
             // Prioritas 3: Normal
@@ -419,7 +423,7 @@
                 bIcon.className = "fa-solid fa-rotate text-emerald-400 fa-spin";
                 bTitle.innerText = "Sistem Sedang Berjalan";
                 bTitle.className = "text-sm font-bold text-emerald-300";
-                bText.innerText = `Motor ON - Daya: ${power} mW`;
+                bText.innerText = `Motor ON - Daya: ${displayPower} mW`;
                 bText.className = "text-xs text-emerald-200/70";
             } else {
                 // Standby (Hide banner)
@@ -428,8 +432,9 @@
 
             // 3. Status Viskositas & Titik Jenuh
             if (motorState === "ON") {
-                // LOGIKA: Viskositas menjadi Kental jika Power >= Batas Daya di Setting
-                if (power >= appSettings.maxPower) { 
+                // Gunakan rawPower untuk logika, karena displayPower hanya kosmetik
+                // Tetapi karena displayPower = rawPower saat ON, sama saja.
+                if (rawPower >= appSettings.maxPower) { 
                     currentViscosity = "Kental";
                 } else {
                     currentViscosity = "Cair";
