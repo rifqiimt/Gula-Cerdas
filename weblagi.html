@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GulaCerdas IoT Monitor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Outfit', sans-serif; }
+        .glass {
+            background: rgba(30, 30, 30, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .page { display: none; padding-bottom: 80px; } /* Padding for bottom nav */
+        .page.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .log-entry { border-left-width: 3px; }
+        .log-info { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .log-warning { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+        .log-error { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .log-status { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+
+        /* Input Style for Settings */
+        .setting-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: 80px;
+            text-align: right;
+            display: none; /* Hidden by default */
+        }
+        .editing .setting-input { display: inline-block; }
+        .editing .setting-value { display: none; }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen bg-[url('https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=2574&auto=format&fit=crop')] bg-cover bg-center bg-fixed bg-no-repeat">
+    
+    <!-- Overlay Gelap -->
+    <div class="fixed inset-0 bg-black/90 z-0"></div>
+
+    <div class="relative z-10 w-full max-w-lg mx-auto p-4 h-screen flex flex-col">
+        
+        <!-- Header Global -->
+        <div class="flex justify-between items-center mb-4 shrink-0">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white/90">GulaCerdas <span class="text-orange-500">Monitor</span></h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="connection-status" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    <p class="text-xs text-gray-400 font-mono" id="status-text">Disconnected</p>
+                </div>
+            </div>
+            <div class="bg-white/5 p-2 rounded-xl border border-white/10">
+                <i class="fa-solid fa-cloud text-blue-400"></i>
+            </div>
+        </div>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto pb-20 no-scrollbar">
+
+            <!-- =========================== PAGE: DASHBOARD =========================== -->
+            <div id="dashboard" class="page active space-y-4">
+                
+                <!-- Notification Banner -->
+                <div id="notif-banner" class="rounded-xl p-4 flex items-center gap-3 border-l-4 hidden transition-all duration-300">
+                    <i id="notif-icon" class="text-xl"></i>
+                    <div>
+                        <p id="notif-title" class="text-sm font-bold">Status Sistem</p>
+                        <p id="notif-text" class="text-xs opacity-80">Sistem Berjalan Normal</p>
+                    </div>
+                </div>
+
+                <!-- Info Grid (4 Kotak) -->
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Suhu -->
+                    <div class="glass rounded-xl p-4 relative overflow-hidden">
+                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Suhu</p>
+                        <div class="flex items-end gap-1 mt-1">
+                            <h2 id="val-temp" class="text-2xl font-bold text-white">0</h2>
+                            <span class="text-xs text-gray-500 mb-1">°C</span>
+                        </div>
+                        <div class="w-full bg-gray-800 h-1 mt-2 rounded-full"><div id="bar-temp" class="h-full bg-orange-500 w-0 transition-all"></div></div>
+                    </div>
+                    
+                    <!-- Viskositas -->
+                    <div class="glass rounded-xl p-4">
+                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Viskositas</p>
+                        <h2 id="val-visc" class="text-lg font-bold text-blue-300 mt-1">Cair</h2>
+                        <p class="text-[10px] text-gray-500 mt-1">Status Kekentalan</p>
+                    </div>
+
+                    <!-- Titik Jenuh -->
+                    <div class="glass rounded-xl p-4">
+                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Titik Jenuh</p>
+                        <h2 id="val-sat" class="text-lg font-bold text-purple-300 mt-1">Belum</h2>
+                        <p class="text-[10px] text-gray-500 mt-1">Indikator Kristal</p>
+                    </div>
+
+                    <!-- Durasi -->
+                    <div class="glass rounded-xl p-4">
+                        <p class="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Durasi Masak</p>
+                        <h2 id="val-duration" class="text-lg font-bold text-emerald-300 mt-1 font-mono">00:00:00</h2>
+                        <p class="text-[10px] text-gray-500 mt-1">Waktu Berjalan</p>
+                    </div>
+                </div>
+
+                <!-- Chart Section -->
+                <div class="glass rounded-xl p-4 border-t border-white/5">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-xs font-bold text-orange-400 uppercase">Grafik Suhu (Realtime)</h3>
+                        <span class="text-[10px] text-gray-500 bg-white/5 px-2 py-1 rounded">Live</span>
+                    </div>
+                    <div class="h-40 w-full">
+                        <canvas id="tempChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="sendCommand('START')" class="glass hover:bg-emerald-600/30 border-emerald-500/30 text-emerald-400 p-4 rounded-xl flex flex-col items-center gap-1 active:scale-95 transition">
+                        <i class="fa-solid fa-power-off text-2xl"></i>
+                        <span class="text-[10px] font-bold">START</span>
+                    </button>
+                    <button onclick="sendCommand('STOP')" class="glass hover:bg-yellow-600/30 border-yellow-500/30 text-yellow-400 p-4 rounded-xl flex flex-col items-center gap-1 active:scale-95 transition">
+                        <i class="fa-solid fa-pause text-2xl"></i>
+                        <span class="text-[10px] font-bold">STOP</span>
+                    </button>
+                    <button onclick="sendCommand('RESET')" class="glass hover:bg-rose-600/30 border-rose-500/30 text-rose-400 p-4 rounded-xl flex flex-col items-center gap-1 active:scale-95 transition">
+                        <i class="fa-solid fa-stop text-2xl"></i>
+                        <span class="text-[10px] font-bold">RESET</span>
+                    </button>
+                </div>
+
+                <!-- Log System -->
+                <div class="glass rounded-xl p-3 h-48 flex flex-col">
+                    <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase border-b border-gray-700 pb-1">Log Sistem</h3>
+                    <div id="logContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono">
+                        <!-- Logs injected via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: SETTING =========================== -->
+            <div id="setting" class="page space-y-4">
+                <div id="settings-card" class="glass rounded-xl p-6 text-center">
+                    <h2 class="text-xl font-bold text-white mb-6">Pengaturan Sensor</h2>
+                    
+                    <div class="space-y-4 text-left">
+                        <!-- Setting: Max Suhu -->
+                        <div class="bg-white/5 p-4 rounded-lg border border-white/5 flex justify-between items-center group">
+                            <div>
+                                <p class="text-xs text-gray-400">Batas Suhu Maksimal</p>
+                                <span class="setting-value text-lg font-bold text-orange-400" id="disp-max-temp">132°C</span>
+                                <input type="number" id="input-max-temp" class="setting-input font-bold text-orange-400" value="132">
+                            </div>
+                            <i class="fa-solid fa-temperature-arrow-up text-gray-500 group-hover:text-orange-400 transition"></i>
+                        </div>
+                        
+                        <!-- Setting: Max Power -->
+                        <div class="bg-white/5 p-4 rounded-lg border border-white/5 flex justify-between items-center group">
+                            <div>
+                                <p class="text-xs text-gray-400">Batas Daya Motor (Viskositas)</p>
+                                <span class="setting-value text-lg font-bold text-yellow-400" id="disp-max-power">3200 mW</span>
+                                <input type="number" id="input-max-power" class="setting-input font-bold text-yellow-400" value="3200">
+                            </div>
+                            <i class="fa-solid fa-bolt text-gray-500 group-hover:text-yellow-400 transition"></i>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-6">
+                        <button id="btn-edit-save" onclick="toggleEditMode()" class="flex-1 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition">
+                            <i class="fa-solid fa-pen-to-square mr-2"></i>Edit
+                        </button>
+                        <button onclick="resetSettings()" class="flex-1 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition">
+                            <i class="fa-solid fa-rotate-left mr-2"></i>Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info Preset -->
+                <div class="glass border-dashed border-2 border-gray-600 rounded-xl p-4 flex items-center gap-4 text-gray-400">
+                    <i class="fa-solid fa-circle-info text-2xl"></i>
+                    <p class="text-xs">Pengaturan ini akan disimpan dan mempengaruhi peringatan sistem serta ambang batas viskositas.</p>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: RIWAYAT =========================== -->
+            <div id="riwayat" class="page space-y-4">
+                <div class="flex justify-between items-center px-2">
+                    <h2 class="text-xl font-bold text-white">Riwayat Memasak</h2>
+                    <button onclick="clearAllHistory()" class="text-xs text-red-400 hover:text-red-300 border border-red-500/30 px-3 py-1 rounded-lg">
+                        Hapus Semua
+                    </button>
+                </div>
+                
+                <!-- Grafik Riwayat Terakhir -->
+                <div class="glass rounded-xl p-4">
+                    <h3 class="text-xs font-bold text-gray-400 mb-2">Grafik Sesi Terakhir</h3>
+                    <div class="h-40 w-full">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- List Container -->
+                <div id="historyList" class="space-y-3 pb-4">
+                    <div class="text-center py-10 text-gray-500 text-sm">Belum ada data riwayat baru.</div>
+                </div>
+            </div>
+
+        </div> <!-- End Scrollable Area -->
+
+        <!-- Bottom Navigation (Fixed) -->
+        <div class="fixed bottom-0 left-0 w-full bg-[#1a1a1a] border-t border-gray-800 p-2 z-50">
+            <div class="flex justify-around items-center max-w-lg mx-auto">
+                <button onclick="showPage('dashboard')" class="nav-item active flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-orange-500 transition w-full" data-target="dashboard">
+                    <i class="fa-solid fa-gauge-high text-xl mb-1"></i>
+                    <span class="text-[10px]">Dashboard</span>
+                </button>
+                <button onclick="showPage('setting')" class="nav-item flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-orange-500 transition w-full" data-target="setting">
+                    <i class="fa-solid fa-sliders text-xl mb-1"></i>
+                    <span class="text-[10px]">Setting</span>
+                </button>
+                <button onclick="showPage('riwayat')" class="nav-item flex flex-col items-center gap-1 p-2 text-gray-500 hover:text-orange-500 transition w-full" data-target="riwayat">
+                    <i class="fa-solid fa-clock-rotate-left text-xl mb-1"></i>
+                    <span class="text-[10px]">Riwayat</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- LOGIC SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // --- CONFIG FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyB6nVbI6L1Ggw9I_HQlU_J1iOrnEUTfvEw",
+            authDomain: "gulacerdas.firebaseapp.com",
+            databaseURL: "https://gulacerdas-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "gulacerdas",
+            storageBucket: "gulacerdas.firebasestorage.app",
+            messagingSenderId: "330084768186",
+            appId: "1:330084768186:web:68e97b363c3cbf24d1a583",
+            measurementId: "G-R1F4YYQ5DF"
+        };
+
+        // --- INIT FIREBASE ---
+        let app, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            addLog('info', "Firebase Initialized");
+        } catch (e) {
+            console.error(e);
+            addLog('error', "Firebase Config Error");
+        }
+
+        const monitorRef = ref(db, 'monitoring');
+        const cmdRef = ref(db, 'control/command');
+
+        // --- GLOBAL VARIABLES ---
+        let tempChart, historyChartInstance;
+        let chartData = { labels: [], temperatures: [] };
+        let sessionData = [];
+        let historyData = [];
+        let motorWasRunning = false;
+        let currentViscosity = "Cair"; 
+        
+        // Settings State (Removed targetRpm)
+        let appSettings = {
+            maxTemp: 132,
+            maxPower: 3200
+        };
+
+        // Timer Variables
+        let cookStartTime = null;
+        let cookElapsed = 0;
+        let cookTimer = null;
+
+        // --- INIT CHART.JS ---
+        function initChart() {
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            tempChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Suhu (°C)',
+                        data: chartData.temperatures,
+                        borderColor: '#f97316',
+                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            beginAtZero: true, 
+                            max: 150, 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#6b7280' }
+                        }
+                    },
+                    animation: false
+                }
+            });
+        }
+
+        // --- FIREBASE LISTENER ---
+        onValue(monitorRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                updateDashboard(data);
+                processHistoryLogic(data);
+                
+                // Status Connection
+                document.getElementById('status-text').innerText = "Connected";
+                document.getElementById('status-text').className = "text-xs text-emerald-400 font-mono";
+                document.getElementById('connection-status').className = "w-2 h-2 rounded-full bg-emerald-500";
+            }
+        });
+
+        // --- DASHBOARD UPDATER ---
+        function updateDashboard(data) {
+            const temp = data.temp || 0;
+            const power = data.power || 0;
+            const motorState = data.motor || "OFF";
+
+            // 1. Update Teks
+            document.getElementById('val-temp').innerText = temp.toFixed(1);
+            
+            // 2. Update Bar Suhu & Cek Peringatan
+            const tempPct = Math.min((temp / appSettings.maxTemp) * 100, 100);
+            const barTemp = document.getElementById('bar-temp');
+            barTemp.style.width = `${tempPct}%`;
+            
+            // LOGIKA PERINGATAN (ALERT)
+            const banner = document.getElementById('notif-banner');
+            const bTitle = document.getElementById('notif-title');
+            const bText = document.getElementById('notif-text');
+            const bIcon = document.getElementById('notif-icon');
+
+            // Prioritas 1: Suhu Tinggi
+            if (temp >= appSettings.maxTemp) {
+                barTemp.className = "h-full bg-red-600 transition-all animate-pulse";
+                
+                banner.classList.remove('hidden', 'bg-emerald-900/50', 'border-emerald-500');
+                banner.classList.add('bg-red-900/80', 'border-red-500', 'animate-pulse');
+                
+                bIcon.className = "fa-solid fa-triangle-exclamation text-red-400";
+                bTitle.innerText = "PERINGATAN SUHU TINGGI!";
+                bTitle.className = "text-sm font-bold text-red-200";
+                bText.innerText = `Suhu (${temp}°C) melebihi batas ${appSettings.maxTemp}°C`;
+                bText.className = "text-xs text-red-200";
+            
+            // Prioritas 2: Daya Tinggi
+            } else if (power >= appSettings.maxPower) {
+                barTemp.className = "h-full bg-orange-500 transition-all"; 
+                
+                banner.classList.remove('hidden', 'bg-emerald-900/50', 'border-emerald-500');
+                banner.classList.add('bg-red-900/80', 'border-red-500', 'animate-pulse');
+                
+                bIcon.className = "fa-solid fa-bolt text-red-400";
+                bTitle.innerText = "PERINGATAN DAYA TINGGI!";
+                bTitle.className = "text-sm font-bold text-red-200";
+                bText.innerText = `Daya (${power} mW) melebihi batas ${appSettings.maxPower} mW`;
+                bText.className = "text-xs text-red-200";
+
+            // Prioritas 3: Normal
+            } else if (motorState === "ON") {
+                barTemp.className = "h-full bg-orange-500 transition-all";
+                
+                banner.classList.remove('hidden', 'bg-red-900/80', 'border-red-500', 'animate-pulse');
+                banner.classList.add('glass', 'border-emerald-500'); // Greenish look
+                
+                bIcon.className = "fa-solid fa-rotate text-emerald-400 fa-spin";
+                bTitle.innerText = "Sistem Sedang Berjalan";
+                bTitle.className = "text-sm font-bold text-emerald-300";
+                bText.innerText = `Motor ON - Daya: ${power} mW`;
+                bText.className = "text-xs text-emerald-200/70";
+            } else {
+                // Standby (Hide banner)
+                barTemp.className = "h-full bg-orange-500 transition-all";
+                banner.classList.add('hidden');
+            }
+
+            // 3. Status Viskositas & Titik Jenuh
+            if (motorState === "ON") {
+                // LOGIKA: Viskositas menjadi Kental jika Power >= Batas Daya di Setting
+                if (power >= appSettings.maxPower) { 
+                    currentViscosity = "Kental";
+                } else {
+                    currentViscosity = "Cair";
+                }
+            }
+
+            // Update UI Viskositas
+            const elVisc = document.getElementById('val-visc');
+            if (currentViscosity === "Kental") {
+                elVisc.innerText = "Kental";
+                elVisc.className = "text-lg font-bold text-orange-300 mt-1";
+            } else {
+                elVisc.innerText = "Cair";
+                elVisc.className = "text-lg font-bold text-blue-300 mt-1";
+            }
+
+            // Update UI Titik Jenuh
+            const elSat = document.getElementById('val-sat');
+            let isSaturated = false;
+
+            if (temp >= appSettings.maxTemp) { 
+                elSat.innerText = "Tercapai";
+                elSat.className = "text-lg font-bold text-red-400 mt-1 animate-pulse";
+                isSaturated = true;
+            } else {
+                elSat.innerText = "Belum";
+                elSat.className = "text-lg font-bold text-purple-300 mt-1";
+                isSaturated = false;
+            }
+
+            // --- AUTO STOP ---
+            if (motorState === "ON" && currentViscosity === "Kental" && isSaturated) {
+                sendCommand('STOP');
+                addLog('status', "✅ AUTO STOP: Proses Selesai (Jenuh & Kental)");
+            }
+
+            // 4. Update Chart Realtime
+            const timeStr = new Date().toLocaleTimeString();
+            if (chartData.labels.length > 30) {
+                chartData.labels.shift();
+                chartData.temperatures.shift();
+            }
+            chartData.labels.push(timeStr);
+            chartData.temperatures.push(temp);
+            if(tempChart) tempChart.update();
+        }
+
+        // --- HISTORY LOGIC & PERSISTENCE ---
+        function processHistoryLogic(data) {
+            const motorState = data.motor || "OFF";
+            const temp = data.temp || 0;
+            const power = data.power || 0;
+
+            if(motorState === "ON") {
+                if(!cookTimer) startCookTimer();
+                motorWasRunning = true;
+                sessionData.push({ time: new Date().toLocaleTimeString(), temp: temp, rpm: power });
+            } else {
+                if(cookTimer) stopCookTimer();
+            }
+
+            if (motorWasRunning && motorState === "OFF") {
+                addLog('status', "Sesi selesai. Menyimpan riwayat...");
+                
+                if (sessionData.length > 0) {
+                    const sessionRecord = {
+                        id: Date.now(),
+                        date: new Date().toLocaleString(),
+                        duration: document.getElementById('val-duration').innerText,
+                        maxTemp: Math.max(...sessionData.map(d => d.temp)).toFixed(1),
+                        data: [...sessionData]
+                    };
+                    
+                    historyData.unshift(sessionRecord); 
+                    saveHistory();
+                    
+                    renderHistoryList();
+                    renderHistoryChart(sessionRecord);
+                }
+
+                sessionData = [];
+                motorWasRunning = false;
+                resetCookTimer();
+            }
+        }
+
+        // --- STORAGE & SETTINGS FUNCTIONS ---
+        
+        // 1. Settings Logic
+        window.loadSettings = () => {
+            const saved = localStorage.getItem('gc_settings');
+            if(saved) appSettings = JSON.parse(saved);
+            updateSettingsUI();
+        }
+
+        window.saveSettings = () => {
+            appSettings.maxTemp = parseFloat(document.getElementById('input-max-temp').value) || 132;
+            appSettings.maxPower = parseFloat(document.getElementById('input-max-power').value) || 3200;
+            
+            // Simpan ke Local Storage
+            localStorage.setItem('gc_settings', JSON.stringify(appSettings));
+            
+            updateSettingsUI();
+            addLog('info', "Pengaturan Disimpan.");
+            
+            // Exit edit mode
+            document.getElementById('settings-card').classList.remove('editing');
+            const btn = document.getElementById('btn-edit-save');
+            btn.innerHTML = '<i class="fa-solid fa-pen-to-square mr-2"></i>Edit';
+            btn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+            btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+        }
+
+        window.updateSettingsUI = () => {
+            // Update Display Spans
+            document.getElementById('disp-max-temp').innerText = appSettings.maxTemp + "°C";
+            document.getElementById('disp-max-power').innerText = appSettings.maxPower + " mW";
+            
+            // Update Inputs
+            document.getElementById('input-max-temp').value = appSettings.maxTemp;
+            document.getElementById('input-max-power').value = appSettings.maxPower;
+        }
+
+        window.toggleEditMode = () => {
+            const card = document.getElementById('settings-card');
+            const btn = document.getElementById('btn-edit-save');
+            
+            if(card.classList.contains('editing')) {
+                // Save Action
+                saveSettings();
+            } else {
+                // Enter Edit Mode
+                card.classList.add('editing');
+                btn.innerHTML = '<i class="fa-solid fa-save mr-2"></i>Simpan';
+                btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+            }
+        }
+
+        window.resetSettings = () => {
+            if(confirm("Kembalikan pengaturan ke default?")) {
+                appSettings = { maxTemp: 132, maxPower: 3200 };
+                localStorage.setItem('gc_settings', JSON.stringify(appSettings));
+                updateSettingsUI();
+                addLog('warning', "Pengaturan di-reset.");
+            }
+        }
+
+        // 2. History Storage Logic
+        window.loadHistory = () => {
+            const saved = localStorage.getItem('gc_history');
+            if(saved) {
+                historyData = JSON.parse(saved);
+                renderHistoryList();
+                if(historyData.length > 0) renderHistoryChart(historyData[0]);
+            }
+        }
+
+        window.saveHistory = () => {
+            localStorage.setItem('gc_history', JSON.stringify(historyData));
+        }
+
+        window.deleteHistory = (id) => {
+            if(confirm("Hapus data riwayat ini?")) {
+                historyData = historyData.filter(item => item.id !== id);
+                saveHistory();
+                renderHistoryList();
+            }
+        }
+
+        window.clearAllHistory = () => {
+            if(confirm("Hapus SEMUA riwayat?")) {
+                historyData = [];
+                saveHistory();
+                renderHistoryList();
+                addLog('warning', "Semua riwayat dihapus.");
+            }
+        }
+
+        // --- TIMER FUNCTIONS ---
+        function startCookTimer() {
+            if(cookStartTime) return;
+            cookStartTime = Date.now();
+            cookTimer = setInterval(updateTimerDisplay, 1000);
+        }
+
+        function stopCookTimer() {
+            if(!cookStartTime) return;
+            cookElapsed += Math.floor((Date.now() - cookStartTime) / 1000);
+            cookStartTime = null;
+            clearInterval(cookTimer);
+            cookTimer = null;
+        }
+
+        function resetCookTimer() {
+            cookStartTime = null;
+            cookElapsed = 0;
+            if(cookTimer) clearInterval(cookTimer);
+            cookTimer = null;
+            updateTimerDisplay(); 
+        }
+
+        function updateTimerDisplay() {
+            let total = cookElapsed;
+            if(cookStartTime) {
+                total += Math.floor((Date.now() - cookStartTime) / 1000);
+            }
+            const h = String(Math.floor(total / 3600)).padStart(2, "0");
+            const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+            const s = String(total % 60).padStart(2, "0");
+            document.getElementById('val-duration').innerText = `${h}:${m}:${s}`;
+        }
+
+        // --- UI FUNCTIONS ---
+        function addLog(type, msg) {
+            const container = document.getElementById('logContainer');
+            const div = document.createElement('div');
+            const time = new Date().toLocaleTimeString('id-ID', {hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            
+            let typeClass = 'log-info';
+            if(type === 'warning') typeClass = 'log-warning';
+            if(type === 'error') typeClass = 'log-error';
+            if(type === 'status') typeClass = 'log-status';
+
+            div.className = `p-2 rounded mb-1 text-gray-300 flex gap-2 items-start log-entry ${typeClass}`;
+            div.innerHTML = `<span class="opacity-50 font-mono text-[10px] mt-0.5">[${time}]</span> <span>${msg}</span>`;
+            
+            container.prepend(div);
+            if(container.children.length > 50) container.lastChild.remove();
+        }
+
+        function renderHistoryList() {
+            const container = document.getElementById('historyList');
+            container.innerHTML = "";
+            
+            if(historyData.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-gray-500 text-sm">Belum ada data riwayat.</div>';
+                return;
+            }
+
+            historyData.forEach((item) => {
+                const card = document.createElement('div');
+                card.className = "glass rounded-xl p-4 flex justify-between items-center group hover:bg-white/5 transition";
+                card.onclick = () => renderHistoryChart(item); 
+                card.innerHTML = `
+                    <div class="cursor-pointer">
+                        <p class="text-[10px] text-gray-500 font-mono">${item.date}</p>
+                        <div class="flex gap-3 mt-1">
+                            <div><span class="text-xs text-gray-400">Temp Max</span><p class="font-bold text-orange-400">${item.maxTemp}°C</p></div>
+                            <div><span class="text-xs text-gray-400">Durasi</span><p class="font-bold text-emerald-400">${item.duration}</p></div>
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); deleteHistory(${item.id})" class="text-red-500/50 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderHistoryChart(session) {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            
+            if(historyChartInstance) historyChartInstance.destroy();
+
+            const labels = session.data.map(d => d.time);
+            const temps = session.data.map(d => d.temp);
+
+            historyChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Suhu',
+                        data: temps,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        title: { display: true, text: `Grafik Sesi: ${session.date}`, color: '#9ca3af', font: {size: 10} }
+                    },
+                    scales: { 
+                        x: { display: false },
+                        y: { display: true, grid: { color: 'rgba(255,255,255,0.05)' } } 
+                    }
+                }
+            });
+        }
+
+        // --- COMMAND ---
+        window.sendCommand = (cmd) => {
+            addLog('info', `Mengirim Perintah: ${cmd}...`);
+            set(cmdRef, cmd).catch(e => addLog('error', "Gagal kirim perintah"));
+            
+            if(cmd === 'RESET') {
+                resetCookTimer();
+                currentViscosity = "Cair"; 
+                document.getElementById('val-visc').innerText = "Cair";
+                document.getElementById('val-visc').className = "text-lg font-bold text-blue-300 mt-1";
+                document.getElementById('val-sat').innerText = "Belum";
+                document.getElementById('val-sat').className = "text-lg font-bold text-purple-300 mt-1";
+                addLog('status', "Sistem Di-Reset Manual");
+            }
+        };
+
+        // --- PAGE NAVIGATION ---
+        window.showPage = (pageId) => {
+            document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(el => {
+                if(el.dataset.target === pageId) {
+                    el.classList.add('text-orange-500', 'active');
+                    el.classList.remove('text-gray-500');
+                } else {
+                    el.classList.remove('text-orange-500', 'active');
+                    el.classList.add('text-gray-500');
+                }
+            });
+        };
+
+        // --- INIT ON LOAD ---
+        window.addEventListener('load', () => {
+            initChart();
+            loadSettings(); // Load settings from localStorage
+            loadHistory();  // Load history from localStorage
+            addLog('status', "Dashboard Siap.");
+        });
+
+    </script>
+</body>
+</html>
